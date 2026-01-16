@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Restart</title>
+    <style>
+        /* --- iOS Design System --- */
+        :root {
+            --ios-bg: #F2F2F7;
+            --ios-card: rgba(255, 255, 255, 0.85);
+            --blur: saturate(180%) blur(25px);
+            --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+            --primary: #000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font);
+            background-color: #000; /* 开场黑屏 */
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- 1. 开场动画层 --- */
+        #intro-layer {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+        }
+
+        .intro-text {
+            color: #666;
+            font-size: 13px;
+            letter-spacing: 4px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            opacity: 0;
+            animation: fadeIn 2s forwards;
+        }
+
+        .big-number {
+            font-size: 140px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .big-number.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        @keyframes fadeIn { to { opacity: 1; } }
+
+        /* --- 2. 主容器 (共用背景) --- */
+        #main-container {
+            position: absolute;
+            width: 100%; height: 100%;
+            /* 干净的高级灰渐变 */
+            background: radial-gradient(circle at 50% 10%, #d4fc79 0%, #96e6a1 100%);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transform: scale(0.96);
+            transition: all 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* 卡片通用样式 */
+        .glass-card {
+            width: 86%;
+            max-width: 360px;
+            background: var(--ios-card);
+            backdrop-filter: var(--blur);
+            -webkit-backdrop-filter: var(--blur);
+            border-radius: 30px;
+            padding: 30px 24px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15);
+            text-align: center;
+            position: absolute;
+            transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* 日历视图 */
+        #calendar-view {
+            z-index: 2;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 25px 0;
+            letter-spacing: 1px;
+            color: #1d1d1f;
+        }
+
+        /* 日历格子 */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-bottom: 35px;
+        }
+
+        .day-cell {
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #1d1d1f;
+            position: relative;
+            border-radius: 8px;
+        }
+
+        /* 划线动画 */
+        .scribble-svg {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 120%; height: 120%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .scribble-path {
+            fill: none;
+            stroke: #ff3b30;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            opacity: 0.7;
+        }
+        .active-scratch .scribble-path {
+            animation: scratch 0.4s ease-out forwards;
+        }
+        .day-cell.dimmed { color: #c7c7cc; transition: color 0.4s; }
+        @keyframes scratch { to { stroke-dashoffset: 0; } }
+
+        /* 按钮 */
+        .btn-group {
+            position: relative;
+            height: 60px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.5s;
+        }
+        .btn {
+            border: none;
+            padding: 14px 36px;
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            transition: transform 0.1s;
+        }
+        .btn-black {
+            background: #000;
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        .btn-black:active { transform: scale(0.95); }
+        
+        .btn-dodge {
+            position: absolute;
+            right: 0; top: 0;
+            background: #fff;
+            color: #666;
+            padding: 10px 20px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        /* --- 3. 老虎机视图 (Slot Machine) --- */
+        #slot-view {
+            z-index: 1;
+            opacity: 0;
+            transform: scale(0.95) translateY(20px);
+            display: none; /* 初始隐藏 */
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .slot-machine {
+            width: 100%;
+            height: 180px;
+            background: #fff;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        /* 渐变遮罩，制造3D滚轮感 */
+        .slot-machine::before, .slot-machine::after {
+            content: '';
+            position: absolute;
+            left: 0; width: 100%; height: 50px;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .slot-machine::before { top: 0; background: linear-gradient(to bottom, #fff, transparent); }
+        .slot-machine::after { bottom: 0; background: linear-gradient(to top, #fff, transparent); }
+
+        /* 选中线 */
+        .slot-line {
+            position: absolute;
+            top: 50%; left: 10%; width: 80%; height: 40px;
+            transform: translateY(-50%);
+            border-top: 2px solid rgba(0,0,0,0.1);
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .reel {
+            display: flex;
+            flex-direction: column;
+            transition: transform 3s cubic-bezier(0.1, 1, 0.1, 1); /* 停止时的缓冲 */
+        }
+
+        .reel-item {
+            height: 60px; /* 每个选项高度 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .result-msg {
+            font-size: 14px;
+            color: #888;
+            margin-top: 20px;
+            letter-spacing: 1px;
+            opacity: 0; /* 初始隐藏 */
+            transform: translateY(10px);
+            transition: all 0.5s;
+        }
+        .result-msg.show { opacity: 1; transform: translateY(0); }
+
+    </style>
+</head>
+<body>
+
+    <!-- 1. 倒数层 -->
+    <div id="intro-layer">
+        <div class="intro-text">Days without communication</div>
+        <div class="big-number" id="num-display"></div>
+    </div>
+
+    <!-- 2. 主界面 -->
+    <div id="main-container">
+        
+        <!-- 卡片A: 日历 -->
+        <div class="glass-card" id="calendar-view">
+            <h2>JANUARY</h2>
+            <div class="calendar-grid" id="calendar-grid">
+                <!-- JS填充 -->
+            </div>
+            <div class="btn-group" id="btn-group">
+                <button class="btn btn-black" onclick="toSlotView()">翻篇</button>
+                <button class="btn btn-dodge" id="dodge-btn">不要</button>
+            </div>
+        </div>
+
+        <!-- 卡片B: 老虎机 -->
+        <div class="glass-card" id="slot-view">
+            <h2>DATE NIGHT</h2>
+            
+            <div class="slot-machine">
+                <div class="slot-line"></div>
+                <div class="reel" id="reel">
+                    <!-- JS填充选项 -->
+                </div>
+            </div>
+
+            <button class="btn btn-black" id="spin-btn" onclick="spin()">GO</button>
+            
+            <div class="result-msg" id="final-msg">等你回复 🤍</div>
+        </div>
+
+    </div>
+
+    <script>
+        // 配置
+        const startDay = 5;
+        const endDay = 16;
+        const totalDays = 31;
+        
+        // 约会选项 (为了滚动效果，我们会把这个数组重复几遍)
+        const options = [
+            "🦞 海鲜自助", 
+            "🎬 去看电影", 
+            "🍲 牛肉火锅", 
+            "💆‍♀️ 全身SPA",  
+            "🍺 喝一杯",
+            "🍣 精品日料"
+        ];
+
+        // DOM
+        const numDisplay = document.getElementById('num-display');
+        const introLayer = document.getElementById('intro-layer');
+        const mainContainer = document.getElementById('main-container');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const btnGroup = document.getElementById('btn-group');
+        const dodgeBtn = document.getElementById('dodge-btn');
+        const calendarView = document.getElementById('calendar-view');
+        const slotView = document.getElementById('slot-view');
+        const reel = document.getElementById('reel');
+        const spinBtn = document.getElementById('spin-btn');
+        const finalMsg = document.getElementById('final-msg');
+
+        // --- 初始化 ---
+        
+        // 1. 生成日历
+        for(let i=0; i<4; i++) calendarGrid.appendChild(document.createElement('div')); // 占位
+        for(let i=1; i<=totalDays; i++) {
+            const div = document.createElement('div');
+            div.className = 'day-cell';
+            div.id = `day-${i}`;
+            div.innerText = i;
+            div.innerHTML += `<svg class="scribble-svg" viewBox="0 0 100 100"><path class="scribble-path" d="M10,80 Q50,20 90,80" /></svg>`;
+            calendarGrid.appendChild(div);
+        }
+
+        // 2. 生成老虎机列表
+        // 重复列表 5 次，确保滚得够久
+        let reelHtml = '';
+        const loops = 5; 
+        for(let i=0; i<loops; i++) {
+            options.forEach(opt => {
+                reelHtml += `<div class="reel-item">${opt}</div>`;
+            });
+        }
+        reel.innerHTML = reelHtml;
+        const itemHeight = 60; // css定义的
+
+        // --- 逻辑控制 ---
+
+        async function playIntro() {
+            await sleep(800);
+            
+            for(let i=startDay; i<=endDay; i++) {
+                numDisplay.innerText = i;
+                numDisplay.classList.remove('show');
+                void numDisplay.offsetWidth; // trigger reflow
+                numDisplay.classList.add('show');
+                
+                // 动态延时：数字越大，停顿越久
+                // 5-10: 比较快 (200ms)
+                // 11-14: 变慢 (400ms)
+                // 15: 很慢 (800ms)
+                // 16: 定格 (1500ms)
+                let delay = 200;
+                if(i > 10) delay = 400;
+                if(i > 14) delay = 800;
+                if(i === endDay) delay = 1500;
+                
+                await sleep(delay);
+            }
+
+            // 进主页
+            introLayer.style.opacity = '0';
+            setTimeout(() => {
+                introLayer.style.display = 'none';
+                mainContainer.style.opacity = '1';
+                mainContainer.style.transform = 'scale(1)';
+                startScratch();
+            }, 1000);
+        }
+
+        async function startScratch() {
+            await sleep(500);
+            for(let i=startDay; i<=endDay; i++) {
+                const d = document.getElementById(`day-${i}`);
+                if(d) {
+                    d.classList.add('active-scratch');
+                    setTimeout(() => d.classList.add('dimmed'), 100);
+                }
+                await sleep(100); // 划掉的速度可以稍快
+            }
+            await sleep(300);
+            btnGroup.style.opacity = '1';
+            btnGroup.style.transform = 'translateY(0)';
+            initDodge();
+        }
+
+        // 躲避按钮逻辑
+        function initDodge() {
+            const msgs = ["不嘛", "点不到", "听话", "别闹", "去那边"];
+            const handler = (e) => {
+                if(e.type==='touchstart') e.preventDefault();
+                
+                // 限制在卡片范围内随机跳
+                const cardRect = calendarView.getBoundingClientRect();
+                const btnRect = dodgeBtn.getBoundingClientRect();
+                
+                // 简单的随机位移
+                const rX = (Math.random() - 0.5) * 200;
+                const rY = (Math.random() - 0.5) * 200;
+                
+                dodgeBtn.style.transform = `translate(${rX}px, ${rY}px)`;
+                dodgeBtn.innerText = msgs[Math.floor(Math.random()*msgs.length)];
+            };
+            dodgeBtn.addEventListener('mouseover', handler);
+            dodgeBtn.addEventListener('click', handler);
+            dodgeBtn.addEventListener('touchstart', handler);
+        }
+
+        // 切换到老虎机视图
+        window.toSlotView = function() {
+            calendarView.style.transform = 'translateX(-20px)';
+            calendarView.style.opacity = '0';
+            
+            setTimeout(() => {
+                calendarView.style.display = 'none';
+                slotView.style.display = 'block';
+                // 强制重绘
+                void slotView.offsetWidth;
+                
+                slotView.style.opacity = '1';
+                slotView.style.transform = 'translateY(0) scale(1)';
+            }, 400);
+        }
+
+        // 开始抽奖
+        window.spin = function() {
+            if(spinBtn.disabled) return;
+            spinBtn.disabled = true;
+            spinBtn.innerText = "好运...";
+
+            // 随机决定停在哪一项 (在倒数第二组里选，保证滚足够远)
+            // options.length 是 8
+            // 我们要在 第3或第4组里停下
+            const targetIndexInList = Math.floor(Math.random() * options.length); 
+            // 目标是第 (loops - 2) 组的第 targetIndexInList 个
+            const totalIndex = (loops - 2) * options.length + targetIndexInList;
+            
+            // 计算滚动的距离 (Y轴负方向)
+            // itemHeight * totalIndex
+            // 还要加上偏移量，让文字居中。视口高度180，中间是90。item高度60，中间是30。
+            // 180/2 - 60/2 = 60px 的偏移
+            const offset = -(totalIndex * itemHeight) + 60;
+
+            // CSS设置transform
+            // 先重置一下防止二次点击有问题(虽然这里禁用了)
+            reel.style.transition = "none";
+            reel.style.transform = "translateY(0)";
+            
+            setTimeout(() => {
+                reel.style.transition = "transform 4s cubic-bezier(0.15, 0.9, 0.3, 1)";
+                reel.style.transform = `translateY(${offset}px)`;
+            }, 50);
+
+            // 动画结束后显示文字
+            setTimeout(() => {
+                spinBtn.style.display = 'none'; // 隐藏按钮
+                finalMsg.classList.add('show');
+            }, 4000);
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        // Start
+        playIntro();
+
+    </script>
+</body>
+</html>
